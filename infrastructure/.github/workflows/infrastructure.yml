@@ -1,10 +1,8 @@
-name: Terraform CI/CD
+name: Infrastructure CI/CD
 
-# Pull Request -> terraform plan, posted as a PR comment for review.
-# Merge to main -> terraform apply. This makes REAL changes to live
-# infrastructure. The `environment: production` gate on the apply job
-# lets you optionally require a manual approval in GitHub's Environments
-# settings before it runs, on top of PR review.
+# Pull Request  -> validate + plan, plan posted as PR comment
+# Merge to main -> validate + plan + apply
+# Manual trigger -> choose init/plan/apply/destroy via workflow_dispatch
 
 on:
   pull_request:
@@ -14,28 +12,38 @@ on:
     branches: [main]
     paths:
       - "infrastructure/terraform/**"
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Action to run"
+        required: true
+        default: "plan"
+        type: choice
+        options: [init, plan, apply, destroy]
 
 permissions:
   id-token: write
   contents: read
   pull-requests: write
 
+env:
+  TF_VERSION: "1.11.4"
+  WORKING_DIR: infrastructure/terraform
+
 jobs:
-  # ==========================================================
-  # PLAN - runs only on pull_request events
-  # ==========================================================
-  plan:
-    if: github.event_name == 'pull_request'
+  # ============================================================
+  # VALIDATE - runs on every trigger except a destroy dispatch
+  # ============================================================
+  validate:
+    name: Validate Terraform
     runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.action != 'destroy' }}
     defaults:
       run:
-        working-directory: infrastructure/terraform
+        working-directory: ${{ env.WORKING_DIR }}
     steps:
       - uses: actions/checkout@v4
 
-      # --- Credentials: OIDC preferred ---
-      # Set the AWS_OIDC_ROLE_ARN repo secret (from bootstrap/ output
-      # `deploy_role_arn`) to use this path. No long-lived keys involved.
       - name: Configure AWS credentials (OIDC)
         if: ${{ vars.AWS_AUTH_METHOD != 'access_keys' }}
         uses: aws-actions/configure-aws-credentials@v4
@@ -43,10 +51,6 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-east-1
 
-      # --- Credentials: Access Key fallback ---
-      # Only used if the repository variable AWS_AUTH_METHOD is set to
-      # "access_keys" (e.g. OIDC federation isn't set up yet). Requires
-      # the AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY repo secrets.
       - name: Configure AWS credentials (Access Key fallback)
         if: ${{ vars.AWS_AUTH_METHOD == 'access_keys' }}
         uses: aws-actions/configure-aws-credentials@v4
@@ -57,13 +61,72 @@ jobs:
 
       - uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.11.4"
+          terraform_version: ${{ env.TF_VERSION }}
 
       - name: Terraform Init
         run: terraform init
 
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+        continue-on-error: true   # formatting drift shouldn't block the pipeline
+
       - name: Terraform Validate
         run: terraform validate -no-color
+
+  # ============================================================
+  # PLAN - PR (posts comment) or push to main, or manual "plan"/"apply"
+  # ============================================================
+  plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    needs: validate
+    if: |
+      github.event_name == 'pull_request' ||
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.action == 'plan' || github.event.inputs.action == 'apply'))
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        if: ${{ vars.AWS_AUTH_METHOD != 'access_keys' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Configure AWS credentials (Access Key fallback)
+        if: ${{ vars.AWS_AUTH_METHOD == 'access_keys' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      # Only variables actually declared in variables.tf - no invented
+      # ones. cluster_admin_principal_arns and lambda_source_dir are
+      # intentionally omitted: the former is operator-specific (set via
+      # repo secret below), the latter defaults correctly to the
+      # vendored infrastructure/terraform/lambda-src/ in CI.
+      - name: Create tfvars
+        run: |
+          cat > terraform.tfvars << EOF
+          student_id                    = "${{ vars.STUDENT_ID }}"
+          alert_email                   = "${{ secrets.ALERT_EMAIL }}"
+          eks_version                   = "${{ vars.EKS_VERSION }}"
+          node_instance_types           = ["t3.small"]
+          rds_backup_retention_period   = 0
+          cluster_admin_principal_arns  = ["${{ secrets.AWS_OIDC_ROLE_ARN }}"]
+          EOF
 
       - name: Terraform Plan
         id: plan
@@ -73,8 +136,8 @@ jobs:
         continue-on-error: true
 
       - name: Truncate plan for PR comment
+        if: github.event_name == 'pull_request'
         run: |
-          # GitHub comment bodies cap at 65536 chars; keep well under that.
           if [ "$(wc -c < plan_output.txt)" -gt 60000 ]; then
             echo "... (truncated, see full log in the Actions run) ..." > plan_truncated.txt
             tail -c 55000 plan_output.txt >> plan_truncated.txt
@@ -82,9 +145,8 @@ jobs:
             cp plan_output.txt plan_truncated.txt
           fi
 
-      # Sticky comment: updates the same comment on every push to the PR
-      # instead of spamming a new one each time.
       - name: Post plan as PR comment
+        if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
@@ -130,19 +192,31 @@ jobs:
         if: steps.plan.outputs.exitcode != '0'
         run: exit 1
 
-  # ==========================================================
-  # APPLY - runs only on push to main
-  # ==========================================================
+      - name: Upload plan artifact
+        if: steps.plan.outputs.exitcode == '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ env.WORKING_DIR }}/tfplan
+          retention-days: 1
+
+  # ============================================================
+  # APPLY - push to main, or manual "apply" dispatch
+  # ============================================================
   apply:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    name: Terraform Apply
     runs-on: ubuntu-latest
+    needs: plan
     environment: production   # optional manual-approval gate; safe to remove
+    if: |
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply'))
     permissions:
       id-token: write
-      contents: write   # needs write (not just read) to commit grading.json back
+      contents: write   # needs write to commit grading.json back
     defaults:
       run:
-        working-directory: infrastructure/terraform
+        working-directory: ${{ env.WORKING_DIR }}
     steps:
       - uses: actions/checkout@v4
 
@@ -163,13 +237,32 @@ jobs:
 
       - uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.11.4"
+          terraform_version: ${{ env.TF_VERSION }}
 
       - name: Terraform Init
         run: terraform init
 
+      - name: Create tfvars
+        run: |
+          cat > terraform.tfvars << EOF
+          student_id                    = "${{ vars.STUDENT_ID }}"
+          alert_email                   = "${{ secrets.ALERT_EMAIL }}"
+          eks_version                   = "${{ vars.EKS_VERSION }}"
+          node_instance_types           = ["t3.small"]
+          rds_backup_retention_period   = 0
+          cluster_admin_principal_arns  = ["${{ secrets.AWS_OIDC_ROLE_ARN }}"]
+          EOF
+
       - name: Terraform Apply
         run: terraform apply -auto-approve -input=false
+
+      - name: Configure kubectl
+        run: |
+          CLUSTER=$(terraform output -raw cluster_name)
+          aws eks update-kubeconfig --region us-east-1 --name "$CLUSTER"
+
+      - name: Verify cluster nodes
+        run: kubectl get nodes
 
       # Regenerate grading.json from the (non-sensitive-only) root
       # outputs after every successful apply, so it never drifts from
@@ -184,3 +277,64 @@ jobs:
           git add ../../grading.json
           git diff --cached --quiet || git commit -m "chore: update grading.json [skip ci]"
           git push
+
+      - name: Post deployment summary
+        run: |
+          echo "## Deployment Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Output | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|--------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| cluster_name | $(terraform output -raw cluster_name) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| cluster_endpoint | $(terraform output -raw cluster_endpoint) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| region | $(terraform output -raw region) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| vpc_id | $(terraform output -raw vpc_id) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| assets_bucket_name | $(terraform output -raw assets_bucket_name) |" >> "$GITHUB_STEP_SUMMARY"
+
+  # ============================================================
+  # DESTROY - manual dispatch only, never automatic
+  # ============================================================
+  destroy:
+    name: Terraform Destroy
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
+    environment: production   # same approval gate as apply - destroy is high-risk
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        if: ${{ vars.AWS_AUTH_METHOD != 'access_keys' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Configure AWS credentials (Access Key fallback)
+        if: ${{ vars.AWS_AUTH_METHOD == 'access_keys' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Create tfvars
+        run: |
+          cat > terraform.tfvars << EOF
+          student_id                    = "${{ vars.STUDENT_ID }}"
+          alert_email                   = "${{ secrets.ALERT_EMAIL }}"
+          eks_version                   = "${{ vars.EKS_VERSION }}"
+          node_instance_types           = ["t3.small"]
+          rds_backup_retention_period   = 0
+          cluster_admin_principal_arns  = ["${{ secrets.AWS_OIDC_ROLE_ARN }}"]
+          EOF
+
+      - name: Terraform Destroy
+        run: terraform destroy -auto-approve -input=false

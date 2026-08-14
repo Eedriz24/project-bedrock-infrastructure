@@ -4,6 +4,7 @@ provider "aws" {
   default_tags {
     tags = {
       Project = "tinyuka-2025-capstone"
+      owner   = "Eedriz24"
     }
   }
 }
