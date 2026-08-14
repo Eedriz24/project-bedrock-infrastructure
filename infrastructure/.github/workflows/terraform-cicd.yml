@@ -1,19 +1,31 @@
-name: Terraform Plan
+name: Terraform CI/CD
 
 # Pull Request -> terraform plan, posted as a PR comment for review.
+# Merge to main -> terraform apply. This makes REAL changes to live
+# infrastructure. The `environment: production` gate on the apply job
+# lets you optionally require a manual approval in GitHub's Environments
+# settings before it runs, on top of PR review.
 
 on:
   pull_request:
     paths:
       - "infrastructure/terraform/**"
+  push:
+    branches: [main]
+    paths:
+      - "infrastructure/terraform/**"
 
 permissions:
-  id-token: write        # required for OIDC
+  id-token: write
   contents: read
-  pull-requests: write    # required to post/update the PR comment
+  pull-requests: write
 
 jobs:
+  # ==========================================================
+  # PLAN - runs only on pull_request events
+  # ==========================================================
   plan:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -24,8 +36,6 @@ jobs:
       # --- Credentials: OIDC preferred ---
       # Set the AWS_OIDC_ROLE_ARN repo secret (from bootstrap/ output
       # `deploy_role_arn`) to use this path. No long-lived keys involved.
-     
-
       - name: Configure AWS credentials (OIDC)
         if: ${{ vars.AWS_AUTH_METHOD != 'access_keys' }}
         uses: aws-actions/configure-aws-credentials@v4
@@ -120,4 +130,57 @@ jobs:
         if: steps.plan.outputs.exitcode != '0'
         run: exit 1
 
-  
+  # ==========================================================
+  # APPLY - runs only on push to main
+  # ==========================================================
+  apply:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production   # optional manual-approval gate; safe to remove
+    permissions:
+      id-token: write
+      contents: write   # needs write (not just read) to commit grading.json back
+    defaults:
+      run:
+        working-directory: infrastructure/terraform
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        if: ${{ vars.AWS_AUTH_METHOD != 'access_keys' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Configure AWS credentials (Access Key fallback)
+        if: ${{ vars.AWS_AUTH_METHOD == 'access_keys' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.11.4"
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -input=false
+
+      # Regenerate grading.json from the (non-sensitive-only) root
+      # outputs after every successful apply, so it never drifts from
+      # the live infrastructure.
+      - name: Update grading.json
+        run: terraform output -json > ../../grading.json
+
+      - name: Commit updated grading.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ../../grading.json
+          git diff --cached --quiet || git commit -m "chore: update grading.json [skip ci]"
+          git push
