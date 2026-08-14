@@ -24,6 +24,17 @@ jobs:
       # --- Credentials: OIDC preferred ---
       # Set the AWS_OIDC_ROLE_ARN repo secret (from bootstrap/ output
       # `deploy_role_arn`) to use this path. No long-lived keys involved.
+      # --- TEMPORARY DEBUG STEP ---
+      - name: DEBUG - Decode OIDC token claims
+        run: |
+          TOKEN=$(curl -sSL -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value')
+          echo "$TOKEN" | cut -d. -f2 | base64 -d 2>/dev/null | jq '{sub, aud, repository, repository_owner, ref, event_name}'
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
+          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
+      # --- END TEMPORARY DEBUG STEP ---
+
       - name: Configure AWS credentials (OIDC)
         if: ${{ vars.AWS_AUTH_METHOD != 'access_keys' }}
         uses: aws-actions/configure-aws-credentials@v4
@@ -118,13 +129,4 @@ jobs:
         if: steps.plan.outputs.exitcode != '0'
         run: exit 1
 
-        # --- TEMPORARY DEBUG STEP ---
-      - name: DEBUG - Decode OIDC token claims
-        run: |
-          TOKEN=$(curl -sSL -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value')
-          echo "$TOKEN" | cut -d. -f2 | base64 -d 2>/dev/null | jq '{sub, aud, repository, repository_owner, ref, event_name}'
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
-          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
-      # --- END TEMPORARY DEBUG STEP ---
+  
