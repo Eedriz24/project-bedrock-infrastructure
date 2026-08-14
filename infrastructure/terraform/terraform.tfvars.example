@@ -1,0 +1,26 @@
+student_id  = "alt-soe-tin-025-0228"
+alert_email = "opeyemi.morakinyo558@gmail.com"
+eks_version = "1.34"   
+
+
+# --- Free-tier account overrides ---
+# Since AWS account is under free-tier restrictions, I will keep these as it is.
+node_instance_types         = ["t3.small"]
+rds_backup_retention_period = 0
+
+
+
+# 1. Make sure terraform.tfvars actually contains this line:
+echo 'cluster_admin_principal_arns = ["arn:aws:iam::232428703462:user/cicd_user"]' >> terraform.tfvars
+
+# 2. Confirm it's there
+grep cluster_admin_principal_arns terraform.tfvars
+
+# 3. Now the resource instance exists in configuration - re-run the imports
+terraform import \
+  'module.eks.aws_eks_access_entry.admins["arn:aws:iam::232428703462:user/cicd_user"]' \
+  'project-bedrock-cluster:arn:aws:iam::232428703462:user/cicd_user'
+
+terraform import \
+  'module.eks.aws_eks_access_policy_association.admins["arn:aws:iam::232428703462:user/cicd_user"]' \
+  'project-bedrock-cluster,arn:aws:iam::232428703462:user/cicd_user,arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy'

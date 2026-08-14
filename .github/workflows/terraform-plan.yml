@@ -1,0 +1,119 @@
+name: Terraform Plan
+
+# Pull Request -> terraform plan, posted as a PR comment for review.
+
+on:
+  pull_request:
+    paths:
+      - "infrastructure/terraform/**"
+
+permissions:
+  id-token: write        # required for OIDC
+  contents: read
+  pull-requests: write    # required to post/update the PR comment
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infrastructure/terraform
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- Credentials: OIDC preferred ---
+      # Set the AWS_OIDC_ROLE_ARN repo secret (from bootstrap/ output
+      # `deploy_role_arn`) to use this path. No long-lived keys involved.
+      - name: Configure AWS credentials (OIDC)
+        if: ${{ vars.AWS_AUTH_METHOD != 'access_keys' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-east-1
+
+      # --- Credentials: Access Key fallback ---
+      # Only used if the repository variable AWS_AUTH_METHOD is set to
+      # "access_keys" (e.g. OIDC federation isn't set up yet). Requires
+      # the AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY repo secrets.
+      - name: Configure AWS credentials (Access Key fallback)
+        if: ${{ vars.AWS_AUTH_METHOD == 'access_keys' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.11.4"
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Validate
+        run: terraform validate -no-color
+
+      - name: Terraform Plan
+        id: plan
+        run: |
+          terraform plan -no-color -input=false -out=tfplan 2>&1 | tee plan_output.txt
+          echo "exitcode=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+        continue-on-error: true
+
+      - name: Truncate plan for PR comment
+        run: |
+          # GitHub comment bodies cap at 65536 chars; keep well under that.
+          if [ "$(wc -c < plan_output.txt)" -gt 60000 ]; then
+            echo "... (truncated, see full log in the Actions run) ..." > plan_truncated.txt
+            tail -c 55000 plan_output.txt >> plan_truncated.txt
+          else
+            cp plan_output.txt plan_truncated.txt
+          fi
+
+      # Sticky comment: updates the same comment on every push to the PR
+      # instead of spamming a new one each time.
+      - name: Post plan as PR comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('infrastructure/terraform/plan_truncated.txt', 'utf8');
+            const outcome = "${{ steps.plan.outputs.exitcode }}" === "0" ? "Success" : "Failed";
+            const body = [
+              `### Terraform Plan - ${outcome}`,
+              "",
+              "```diff",
+              plan,
+              "```",
+              "",
+              "Review carefully before merging - terraform apply runs automatically on merge to main and makes real changes to live infrastructure."
+            ].join("\n");
+
+            const marker = "<!-- terraform-plan-comment -->";
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(marker));
+            const fullBody = `${marker}\n${body}`;
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: fullBody,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: fullBody,
+              });
+            }
+
+      - name: Fail job if plan failed
+        if: steps.plan.outputs.exitcode != '0'
+        run: exit 1

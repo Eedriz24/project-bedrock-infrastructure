@@ -1,0 +1,8 @@
+terraform.tfvars
+.terraform/ 
+.terraform.lock.hcl*
+*.tfstate*
+*.tfplan / tfplan
+lambda.zip
+.aws/, kubeconfig
+bootstrap/terraform.tfvars
