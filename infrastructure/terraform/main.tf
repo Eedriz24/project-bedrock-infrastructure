@@ -10,7 +10,7 @@ module "eks" {
   cluster_name                 = "project-bedrock-cluster"
   eks_version                  = var.eks_version
   vpc_id                       = module.vpc.vpc_id
-  node_instance_types          = var.node_instance_types # unresolved variable comment
+  node_instance_types          = var.node_instance_types # unresolved variable
   private_subnet_ids           = module.vpc.private_subnet_ids
   public_subnet_ids            = module.vpc.public_subnet_ids
   cluster_admin_principal_arns = var.cluster_admin_principal_arns
