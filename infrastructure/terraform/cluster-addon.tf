@@ -109,6 +109,7 @@ resource "helm_release" "secrets_store_csi_driver" {
   }
 
   depends_on = [module.eks]
+  
 }
 
 # The AWS provider for the CSI driver ships as a DaemonSet manifest, not
