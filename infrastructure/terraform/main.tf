@@ -21,7 +21,7 @@ module "rds" {
   vpc_id                  = module.vpc.vpc_id
   private_subnet_ids      = module.vpc.private_subnet_ids
   node_security_group_id  = module.eks.node_security_group_id
-  backup_retention_period = var.backup_retention_period
+  backup_retention_period = var.rds_backup_retention_period
 }
 
 module "dynamodb" {
