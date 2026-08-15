@@ -122,7 +122,9 @@ resource "aws_iam_role_policy" "iam_scoped" {
         "iam:CreateOpenIDConnectProvider", "iam:GetOpenIDConnectProvider",
         "iam:PassRole","iam:TagUser", "iam:UntagUser",
         "iam:DeleteOpenIDConnectProvider", "iam:TagOpenIDConnectProvider",
-        "iam:UntagOpenIDConnectProvider",
+        "iam:UntagOpenIDConnectProvider", "iam:CreatePolicy", "iam:DeletePolicy", "iam:GetPolicy",
+        "iam:GetPolicyVersion", "iam:CreatePolicyVersion", "iam:DeletePolicyVersion",
+        "iam:ListPolicyVersions", "iam:TagPolicy", "iam:UntagPolicy",
       ]
       Resource = "*"
     }]
