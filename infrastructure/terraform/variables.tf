@@ -58,3 +58,8 @@ variable "cluster_admin_principal_arns" {
   type        = list(string)
   default     = []
 }
+variable "rds_backup_retention_period" {
+  description = "RDS automated backup retention in days. Default is 0 (some free-tier accounts disallow any retention >0). Set to 7 for the bonus 5.5 resilience objective once your account allows it."
+  type        = number
+  default     = 0
+}
