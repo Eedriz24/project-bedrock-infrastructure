@@ -125,8 +125,8 @@ jobs:
           student_id                    = "${{ vars.STUDENT_ID }}"
           alert_email                   = "${{ secrets.ALERT_EMAIL }}"
           eks_version                   = "${{ vars.EKS_VERSION }}"
-          node_instance_types           = ["t3.small"]
-          rds_backup_retention_period   = 0
+          node_instance_type           = ["t3.small"]
+          backup_retention_period   = 0
           cluster_admin_principal_arns  = ["${{ secrets.AWS_OIDC_ROLE_ARN }}"]
           EOF
 
@@ -250,8 +250,8 @@ jobs:
           student_id                    = "${{ vars.STUDENT_ID }}"
           alert_email                   = "${{ secrets.ALERT_EMAIL }}"
           eks_version                   = "${{ vars.EKS_VERSION }}"
-          node_instance_types           = ["t3.small"]
-          rds_backup_retention_period   = 0
+          node_instance_type           = ["t3.small"]
+          backup_retention_period   = 0
           cluster_admin_principal_arns  = ["${{ secrets.AWS_OIDC_ROLE_ARN }}"]
           EOF
 
@@ -333,8 +333,8 @@ jobs:
           student_id                    = "${{ vars.STUDENT_ID }}"
           alert_email                   = "${{ secrets.ALERT_EMAIL }}"
           eks_version                   = "${{ vars.EKS_VERSION }}"
-          node_instance_types           = ["t3.small"]
-          rds_backup_retention_period   = 0
+          node_instance_type           = ["t3.small"]
+          backup_retention_period   = 0
           cluster_admin_principal_arns  = ["${{ secrets.AWS_OIDC_ROLE_ARN }}"]
           EOF
 
