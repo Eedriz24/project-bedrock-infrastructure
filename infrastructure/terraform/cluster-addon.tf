@@ -99,6 +99,7 @@ resource "helm_release" "alb_controller" {
 resource "helm_release" "secrets_store_csi_driver" {
   name       = "csi-secrets-store"
   repository = "https://kubernetes-sigs.github.io/secrets-store-csi-driver/charts"
+  version    = "1.4.0"
   chart      = "secrets-store-csi-driver"
   namespace  = "kube-system"
 
