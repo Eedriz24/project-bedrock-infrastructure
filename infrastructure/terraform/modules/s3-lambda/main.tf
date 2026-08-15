@@ -14,7 +14,7 @@ resource "aws_s3_bucket_public_access_block" "assets" {
 # --- Lambda package ---
 data "archive_file" "lambda_zip" {
   type        = "zip"
-  source_dir  = can(regex("^/", var.lambda_source_dir)) ? var.lambda_source_dir : "${path.module}/${var.lambda_source_dir}"
+  source_dir  = can(regex("^/", var.lambda_source_dir)) ? var.lambda_source_dir : "${path.module}/../../lambda-src"
   output_path = "${path.module}/lambda.zip"
 }
 
