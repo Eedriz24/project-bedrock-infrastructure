@@ -64,3 +64,4 @@ variable "retail_app_namespace" {
   type        = string
   default     = "retail-app"
 }
+

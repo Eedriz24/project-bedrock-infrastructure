@@ -10,7 +10,7 @@ module "eks" {
   cluster_name                 = "project-bedrock-cluster"
   eks_version                  = var.eks_version
   vpc_id                       = module.vpc.vpc_id
-  node_instance_types          = var.node_instance_types # unresolved variable
+  node_instance_types           = var.node_instance_type 
   private_subnet_ids           = module.vpc.private_subnet_ids
   public_subnet_ids            = module.vpc.public_subnet_ids
   cluster_admin_principal_arns = var.cluster_admin_principal_arns
@@ -21,7 +21,7 @@ module "rds" {
   vpc_id                  = module.vpc.vpc_id
   private_subnet_ids      = module.vpc.private_subnet_ids
   node_security_group_id  = module.eks.node_security_group_id
-  backup_retention_period = var.rds_backup_retention_period
+  backup_retention_period = var.backup_retention_period
 }
 
 module "dynamodb" {
