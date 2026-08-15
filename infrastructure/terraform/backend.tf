@@ -21,5 +21,22 @@ terraform {
       source  = "hashicorp/archive"
       version = "~> 2.4"
     }
+
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = "~> 2.31"
+    }
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 2.14"
+    }
+    http = {
+      source  = "hashicorp/http"
+      version = "~> 3.4"
+    }
+
   }
+  
 }
+
+

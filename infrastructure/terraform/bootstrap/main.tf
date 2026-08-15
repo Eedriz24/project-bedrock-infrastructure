@@ -120,7 +120,9 @@ resource "aws_iam_role_policy" "iam_scoped" {
         "iam:AttachUserPolicy", "iam:DetachUserPolicy", "iam:ListAttachedUserPolicies",
         "iam:CreateAccessKey", "iam:DeleteAccessKey", "iam:ListAccessKeys",
         "iam:CreateOpenIDConnectProvider", "iam:GetOpenIDConnectProvider",
-        "iam:PassRole"
+        "iam:PassRole","iam:TagUser", "iam:UntagUser",
+        "iam:DeleteOpenIDConnectProvider", "iam:TagOpenIDConnectProvider",
+        "iam:UntagOpenIDConnectProvider",
       ]
       Resource = "*"
     }]
@@ -134,3 +136,5 @@ output "deploy_role_arn" {
 output "oidc_provider_arn" {
   value = aws_iam_openid_connect_provider.github.arn
 }
+
+

@@ -41,8 +41,8 @@ variable "azs" {
   default     = ["us-east-1a", "us-east-1b"]
 }
 
-variable "node_instance_types" {
-  description = "EC2 instance types for the EKS managed node group."
+variable "node_instance_type" {
+  description = "EC2 instance type for EKS nodes"
   type        = list(string)
   default     = ["t3.small"]
 }
@@ -58,8 +58,9 @@ variable "cluster_admin_principal_arns" {
   type        = list(string)
   default     = []
 }
-variable "rds_backup_retention_period" {
-  description = "RDS automated backup retention in days. Default is 0 (some free-tier accounts disallow any retention >0). Set to 7 for the bonus 5.5 resilience objective once your account allows it."
-  type        = number
-  default     = 0
+
+variable "retail_app_namespace" {
+  description = "Kubernetes namespace the retail-store-sample-app deploys into. Used to scope the Secrets Store CSI Driver's IRSA trust policy."
+  type        = string
+  default     = "retail-app"
 }
