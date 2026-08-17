@@ -80,6 +80,9 @@ data "aws_iam_policy_document" "trust" {
     "repo:${var.github_org}*/${var.github_repo}*:pull_request",
     "repo:${var.github_org}*/${var.github_repo}*:ref:refs/heads/main",
     "repo:${var.github_org}*/${var.github_repo}*:environment:production",
+    "repo:${var.github_org}*/project-bedrock-application*:pull_request",
+    "repo:${var.github_org}*/project-bedrock-application*:ref:refs/heads/main",
+    "repo:${var.github_org}*/project-bedrock-application*:environment:production",
   ]
 }
   }
