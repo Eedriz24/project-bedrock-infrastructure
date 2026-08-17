@@ -46,7 +46,8 @@ resource "aws_db_instance" "mysql" {
 }
 
 resource "aws_secretsmanager_secret" "mysql" {
-  name = "bedrock/catalog-mysql"
+  name                    = "bedrock/catalog-mysql"
+  recovery_window_in_days = 0 # allow immediate recreation after destroy - avoids "scheduled for deletion" conflicts
 }
 
 resource "aws_secretsmanager_secret_version" "mysql" {
@@ -103,7 +104,8 @@ resource "aws_db_instance" "postgres" {
 }
 
 resource "aws_secretsmanager_secret" "postgres" {
-  name = "bedrock/orders-postgres"
+  name                    = "bedrock/orders-postgres"
+  recovery_window_in_days = 0 # allow immediate recreation after destroy - avoids "scheduled for deletion" conflicts
 }
 
 resource "aws_secretsmanager_secret_version" "postgres" {
