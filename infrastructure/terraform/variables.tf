@@ -56,7 +56,8 @@ variable "backup_retention_period" {
 variable "cluster_admin_principal_arns" {
   description = "IAM principal ARNs to grant explicit cluster-admin EKS Access Entries."
   type        = list(string)
-  default     = []
+  default     = ["arn:aws:iam::232428703462:user/cicd_user",
+    "arn:aws:iam::232428703462:role/bedrock-github-actions-deploy",]
 }
 
 variable "retail_app_namespace" {

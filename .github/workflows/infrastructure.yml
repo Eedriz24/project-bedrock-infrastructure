@@ -115,7 +115,6 @@ jobs:
         run: terraform init
 
       # Only variables actually declared in variables.tf - no invented
-      # ones. cluster_admin_principal_arns and lambda_source_dir are
       # intentionally omitted: the former is operator-specific (set via
       # repo secret below), the latter defaults correctly to the
       # vendored infrastructure/terraform/lambda-src/ in CI.
@@ -127,7 +126,6 @@ jobs:
           eks_version                   = "${{ vars.EKS_VERSION }}"
           node_instance_type           = ["t3.small"]
           backup_retention_period   = 0
-          cluster_admin_principal_arns  = ["${{ secrets.AWS_OIDC_ROLE_ARN }}"]
           EOF
 
       - name: Terraform Plan
@@ -252,7 +250,6 @@ jobs:
           eks_version                   = "${{ vars.EKS_VERSION }}"
           node_instance_type           = ["t3.small"]
           backup_retention_period   = 0
-          cluster_admin_principal_arns  = ["${{ secrets.AWS_OIDC_ROLE_ARN }}"]
           EOF
 
       - name: Terraform Apply
@@ -336,7 +333,6 @@ jobs:
           eks_version                   = "${{ vars.EKS_VERSION }}"
           node_instance_type           = ["t3.small"]
           backup_retention_period   = 0
-          cluster_admin_principal_arns  = ["${{ secrets.AWS_OIDC_ROLE_ARN }}"]
           EOF
 
       - name: Terraform Destroy
