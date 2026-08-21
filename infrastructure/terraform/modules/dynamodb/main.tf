@@ -7,4 +7,15 @@ resource "aws_dynamodb_table" "carts" {
     name = "id"
     type = "S"
   }
+
+  attribute {
+    name = "customerId"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "idx_global_customerId"
+    hash_key        = "customerId"
+    projection_type = "ALL"
+  }
 }

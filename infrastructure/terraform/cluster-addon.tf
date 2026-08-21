@@ -224,7 +224,10 @@ resource "aws_iam_role_policy" "carts_dynamodb_access" {
         "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem",
         "dynamodb:DeleteItem", "dynamodb:Query", "dynamodb:Scan"
       ]
-      Resource = module.dynamodb.carts_table_arn
+      Resource = [
+        module.dynamodb.carts_table_arn,
+        "${module.dynamodb.carts_table_arn}/index/*"
+      ]
     }]
   })
 }
