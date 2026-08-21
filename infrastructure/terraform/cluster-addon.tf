@@ -178,3 +178,57 @@ resource "aws_iam_role_policy" "secrets_csi_read" {
     }]
   })
 }
+
+
+# ============================================================
+# IRSA role for the carts service - real DynamoDB access
+# (replaces the chart's default in-cluster DynamoDB-local emulator)
+# ============================================================
+data "aws_iam_policy_document" "carts_dynamodb_trust" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [module.eks.oidc_provider_arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${replace(module.eks.oidc_provider_url, "https://", "")}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringLike"
+      variable = "${replace(module.eks.oidc_provider_url, "https://", "")}:sub"
+      values   = ["system:serviceaccount:${var.retail_app_namespace}:retail-store-carts"]
+    }
+  }
+}
+
+resource "aws_iam_role" "carts_dynamodb" {
+  name               = "bedrock-carts-dynamodb-role"
+  assume_role_policy = data.aws_iam_policy_document.carts_dynamodb_trust.json
+}
+
+resource "aws_iam_role_policy" "carts_dynamodb_access" {
+  name = "bedrock-carts-dynamodb-access"
+  role = aws_iam_role.carts_dynamodb.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem", "dynamodb:Query", "dynamodb:Scan"
+      ]
+      Resource = module.dynamodb.carts_table_arn
+    }]
+  })
+}
+
+output "carts_dynamodb_role_arn" {
+  value = aws_iam_role.carts_dynamodb.arn
+}

@@ -16,7 +16,7 @@ variable "public_subnet_ids" {
   type = list(string)
 }
 
-variable "node_instance_types" {
+variable "node_instance_type" {
   description = "Instance types for the default EKS managed node group."
   type        = list(string)
   default     = ["t3.small"]
