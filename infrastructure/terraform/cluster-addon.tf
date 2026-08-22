@@ -232,6 +232,33 @@ resource "aws_iam_role_policy" "carts_dynamodb_access" {
   })
 }
 
-output "carts_dynamodb_role_arn" {
-  value = aws_iam_role.carts_dynamodb.arn
+
+
+resource "null_resource" "cleanup_alb_before_destroy" {
+  triggers = {
+    cluster_name = module.eks.cluster_name
+    region       = var.aws_region
+  }
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = <<-EOT
+      aws eks update-kubeconfig --name ${self.triggers.cluster_name} --region ${self.triggers.region} || true
+      kubectl delete ingress --all --all-namespaces --ignore-not-found=true --timeout=60s || true
+
+      echo "Waiting for ALBs to fully deprovision..."
+      for i in $(seq 1 20); do
+        COUNT=$(aws elbv2 describe-load-balancers --region ${self.triggers.region} \
+          --query "length(LoadBalancers[?contains(DNSName, 'k8s-')])" --output text 2>/dev/null || echo 0)
+        if [ "$COUNT" = "0" ]; then
+          echo "All ALBs cleared."
+          break
+        fi
+        echo "Still waiting... ($i/20, $COUNT ALB(s) remaining)"
+        sleep 15
+      done
+    EOT
+  }
+
+  depends_on = [module.eks, helm_release.alb_controller]
 }
