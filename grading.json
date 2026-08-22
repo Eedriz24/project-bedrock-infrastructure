@@ -4,11 +4,6 @@
     "type": "string",
     "value": "bedrock-assets-alt-soe-tin-025-0228"
   },
-  "carts_dynamodb_role_arn": {
-    "sensitive": false,
-    "type": "string",
-    "value": "arn:aws:iam::232428703462:role/bedrock-carts-dynamodb-role"
-  },
   "cluster_endpoint": {
     "sensitive": false,
     "type": "string",
