@@ -233,7 +233,6 @@ resource "aws_iam_role_policy" "carts_dynamodb_access" {
 }
 
 
-
 resource "null_resource" "cleanup_alb_before_destroy" {
   triggers = {
     cluster_name = module.eks.cluster_name
