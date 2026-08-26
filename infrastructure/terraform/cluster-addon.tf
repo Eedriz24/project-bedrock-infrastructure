@@ -203,7 +203,7 @@ data "aws_iam_policy_document" "carts_dynamodb_trust" {
     condition {
       test     = "StringLike"
       variable = "${replace(module.eks.oidc_provider_url, "https://", "")}:sub"
-      values   = ["system:serviceaccount:${var.retail_app_namespace}:retail-store-carts"]
+      values   = ["system:serviceaccount:${var.retail_app_namespace}:carts"]
     }
   }
 }
